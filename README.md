@@ -15,4 +15,6 @@ To revert project to completely unprocessed, run $source cleanup.sh.
 
 python\_scripts: 
 ------------------
-Contains the python scripts that will run the tracking algorithms. Note: work in progress, as yet unfinished.
+Contains the python scripts that will run the tracking algorithms. 
+
+Note: work in progress, as yet unfinished.
