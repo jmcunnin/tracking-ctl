@@ -9,26 +9,27 @@ class truck_path:
 	def __init__(self, truck_id):
 		self.truck_id = truck_id
 		## Location of stays
-		self.stay_set = set()
+		self.stay_set = list()
 		## List of tuples, tuples are defined as: (start_time, end_time, start_pos, end_pos)
-		self.trips = set()
+		self.trips = list()
 		### paths set contains trace objects
-		self.paths = set()
+		self.paths = list()
+		self.warehouses = list()
 
 	############ MUTATORS: adding values to the fields ############
 	def add_stay(self, stay, values, begin_time, end_time):
-		tup = tuple(stay, values, begin_time, end_time)
-		self.stay_set.add(tup)
+		tup = tuple((stay, values, begin_time, end_time))
+		self.stay_set.append(tup)
 
 	def add_trip(self, start_time, end_time, points_list):
-		added_tuple = tuple(start_time, end_time, points_list)
+		added_tuple = tuple((start_time, end_time, points_list))
 		self.trips.append(added_tuple)
 
 	def add_path(self, input_path):
-		self.paths.add(input_path)
+		self.paths.append(input_path)
 
-	def set_warehouse(self, point):
-		self.warehouse = point
+	def add_warehouse(self, point):
+		self.warehouses.append(point)
 
 
 	############ GETTERS: returning values from the fields ############
@@ -45,7 +46,7 @@ class truck_path:
 		return self.truck_id
 
 	def get_warehouse(self):
-		return self.warehouse
+		return deepcopy(self.warehouses)
 
 
 
