@@ -231,8 +231,3 @@ class tracker:
 
 
 
-if __name__=="__main__":
-	po = truck_path('11FC0202')
-	t = tracker("database/master.sqlite", '11FC0202', po, 1000, 1000, 2, .5, 60)
-	t.compute_tracker()
-	print len(po.get_stays())

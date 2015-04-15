@@ -17,6 +17,7 @@ mkdir -p raw_already_processed
 
 ## Make relavant files
 > database/master.sqlite
+> database/paths.sqlite
 
 
 ## Iterate over raw_data folder. Pass file name
@@ -33,5 +34,5 @@ warehouse_radius=1000
 idle_time=5
 min_warehouse_time = 5000
 
-python python_scripts/main_method.py $stay_radius $stay_time $warehouse_radius $idle_time $min_warehouse_time
+python python_scripts/main_method.py $stay_radius $warehouse_radius $stay_time $idle_time $min_warehouse_time
 
