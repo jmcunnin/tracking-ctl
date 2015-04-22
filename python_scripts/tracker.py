@@ -2,11 +2,12 @@
 import sys, sqlite3, math
 
 from path_object import truck_path
+from copy import deepcopy
 
 class tracker:
 
 
-	def __init__(self, database_path, truck_id, path, stay_radius, warehouse_radius, min_stay_time, max_idle_time, min_warehouse_time):
+	def __init__(self, database_path, truck_id, path, stay_radius, warehouse_radius, min_stay_time, max_idle_time, min_warehouse_time, max_dest_difference):
 		## string representing the path to the database
 		self.db_path = str(database_path)
 		## String representing the name of the values with the truck_id
@@ -21,6 +22,7 @@ class tracker:
 		self.min_stay_time = min_stay_time
 		self.min_warehouse_time = min_warehouse_time
 		self.max_idle_time = max_idle_time
+		self.max_dest_difference = max_dest_difference
 		self.data = list()
 
 	def calculate_warehouse(self):
@@ -73,7 +75,6 @@ class tracker:
 						j += 1
 					else:
 						break
-
 				self.path.add_stay(self.medoid(curr_list), self.data[i:j], self.data[i][2], self.data[j][2])
 				i = j + 1
 
@@ -83,60 +84,61 @@ class tracker:
 	def calculate_trips(self):
 		## Calculate our trips here and add to the path_object
 		stays = self.path.get_stays()
+		warehouses = self.path.get_warehouse()
 		
 		if len(stays) == 0:
 			raise RuntimeError("No stays calculated. Reprametrize")
 
 		## Add a trip object if the first stay does not occur until after the start of the data
-		if self.time_difference(stays[0][2], self.data[0][2]) > 0:
-			start_time = self.data[0][2]
-			j = 0
-			while(self.time_difference(stays[0][2], self.data[j][2]) != 0) and j < len(self.data):
-				j += 1
-			self.path.add_trip(start_time, self.data[j][2], self.data[0:j])
-		
-		## Add all of the other stays
-		data_pointer = 0
-		i = 0
-		while i < len(stays)-1:
-			end_first = stays[i][3]
-			begin_second = stays[i+1][2]
-			while self.time_difference(self.data_pointer, end_first) < 0:
-				data_pointer += 1
-			start_trip = data_pointer
-			while self.time_difference(begin_second, self.data[data_pointer][2]) < 0:
-				data_pointer += 1
-			self.path.add_trip(self.data[start_trip][2], self.data[data_pointer][2], self.data[i:j])
-
-		if self.time_difference(self.data[-1][2], stays[-1][3]) > 0:
-			y = -1
-			while self.time_difference(self.data[y][2], stays[-1][3]) > 0:
-				y -= 1
-			start_pt = len(self.data) + y -1
-			self.path.add_trip(self.data[start_pt][2], self.data[-1][2], self.data[start_pt:])
-
-
-	def calculate_paths(self):
-		## Calculate our paths, store as a trace object and add to the path_object	
-		stays = self.path.get_stays()
-		warehouses = self.path.get_warehouse()
-
-
-		new_list = []
-		while stays:
-			new_point = stays.pop(0)
-			if self.stay_contains_warehouse(new_point, warehouses):
-				self.path.add_path(new_list.append(new_point))
-				new_list = [new_point]
+		current_trip = []
+		for stay in stays:
+			stay_at_warehouse = self.in_warehouse(stay[0], warehouses)
+			if stay_at_warehouse:
+				if not len(current_trip) is 0:
+					self.path.add_trip(current_trip)
+					current_trip[:] = []
 			else:
-				new_list.append(new_point)
-
-		if len(new_list) > 0:
-			self.path.add_path(new_list)
+				current_trip.append(stay)
 
 
+	def in_warehouse(self, point, warehouses):
+		for warehouse in warehouses:
+			if self.distance(point, warehouse) < self.warehouse_radius:
+				return True
+		return False
 
 
+
+	def calculate_destinations(self):
+		stays = self.path.get_stays()
+		stays_copy = deepcopy(stays)
+
+		while len(stays_copy) is not 0:
+			dest = []
+			pt = stays_copy.pop()
+			dest.append(pt[0])
+			while(True):
+				min_pt = self.min_distance_pt(pt[0], stays_copy)
+				if min_pt is None:
+					break
+				elif self.distance(pt[0], min_pt[0]) <= self.max_dest_difference:
+					dest.append(min_pt[0])
+					stays_copy.remove(min_pt)
+				else:
+					break
+			med = self.medoid(dest)
+			self.path.add_destination(med, dest)
+
+	def min_distance_pt(self, point, list_pts):
+		min_dist = 10000000
+		current_best_pt = None
+		for pt in list_pts:
+			dist = self.distance(point, pt[0])
+			if dist < min_dist:
+				current_best_pt = pt
+				min_dist = dist
+
+		return current_best_pt
 	
 	def stay_contains_warehouse(self, point, warehouses):
 		assert type(warehouses) == type([])
@@ -224,9 +226,11 @@ class tracker:
 			database.close()
 
 		self.calculate_stays()
-		self.calculate_trips()
 		self.calculate_warehouse()
-		self.calculate_paths()
+		self.calculate_trips()	
+		self.calculate_destinations()
+
+
 
 
 
