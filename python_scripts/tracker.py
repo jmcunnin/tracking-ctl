@@ -75,7 +75,10 @@ class tracker:
 						j += 1
 					else:
 						break
-				self.path.add_stay(self.medoid(curr_list), self.data[i:j], self.data[i][2], self.data[j][2])
+				try:
+					self.path.add_stay(self.medoid(curr_list), self.data[i:j], self.data[i][2], self.data[j][2])
+				except IndexError as ie:
+					self.path.add_stay(self.medoid(curr_list), self.data[i:j-1], self.data[i][2], self.data[j-1][2])
 				i = j + 1
 
 
@@ -95,10 +98,10 @@ class tracker:
 			stay_at_warehouse = self.in_warehouse(stay[0], warehouses)
 			if stay_at_warehouse:
 				if not len(current_trip) is 0:
-					self.path.add_trip(current_trip)
+					self.path.add_trip(deepcopy(current_trip))
 					current_trip[:] = []
 			else:
-				current_trip.append(stay)
+				current_trip.append(stay[0])
 
 
 	def in_warehouse(self, point, warehouses):
@@ -213,10 +216,11 @@ class tracker:
 		try:
 			database = sqlite3.connect(self.db_path)
 			database.text_factory = str
-			cursor = database.cursor()
-			table_query = 'SELECT latitude, longitude, timestamp FROM master_table WHERE truck_id=?'
-			result = cursor.execute(table_query, [str(self.truck_id)])		
-			self.data = cursor.fetchall()
+			curs = database.cursor()
+
+			curs.execute("""SELECT latitude, longitude, timestamp FROM master_table WHERE truck_id=?""", [str(self.truck_id[0])])
+			self.data = curs.fetchall()
+			
 			database.commit()
 		except Exception as dbe:
 			print "Something went wrong with the database in tracker.py"
@@ -225,10 +229,18 @@ class tracker:
 		finally:
 			database.close()
 
+		## Calculate stays and store to SQL
 		self.calculate_stays()
+		self.path.store_stays_to_SQL(self.db_path)
+
 		self.calculate_warehouse()
-		self.calculate_trips()	
+		self.path.store_warehouses_to_SQL(self.db_path)
+		
+		self.calculate_trips()
+		self.path.store_trips_to_SQL(self.db_path)	
+		
 		self.calculate_destinations()
+		self.path.store_destinations_to_SQL(self.db_path)
 
 
 

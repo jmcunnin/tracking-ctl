@@ -11,7 +11,6 @@ path_dictionary = dict()
 
 database_path =  './database/master.sqlite'
 
-path_object_path = './database/paths.sqlite'
 
 def store_to_sql():
 	for truck in path_dictionary.keys():
@@ -41,15 +40,12 @@ def main(argv):
 	for truck in unique_truckID:
 		truck_PO = truck_path(truck)
 		# track_this = tracker(database_path, truck[0], truck_PO, 1000, 1000, 2, .5, 60)
-		track_this = tracker(database_path, truck, truck_PO, argv[0], argv[1], argv[2], argv[3], argv[4])
+		track_this = tracker(database_path, truck, truck_PO, float(argv[0]), float(argv[1]), float(argv[2]), float(argv[3]), float(argv[4]), float(argv[5]))
 		track_this.compute_tracker()
+		# track_this.compute_tracker()
 		path_dictionary.update({truck[0]:truck_PO})
-
-
-	### Need to now store all path objects from the path dictionary
-	#### NOTE: this might make more sense during the for loop dependent on how much data we are processing 
-
-	### pass paths to vizualization
+		
 
 if __name__=="__main__":
+	print sys.argv[1:]
 	main(sys.argv[1:])
