@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, sqlite3
+import sys, sqlite3, random
 from copy import deepcopy
 
 class truck_path:
@@ -51,69 +51,66 @@ class truck_path:
 	def get_destinations(self):
 		return deepcopy(self.destinations)
 
-	#### Storing to SQL:
-	def store_to_sql(self, database_path):
-		store_stays_to_SQL(database_path)
-
-
+	############ STORAGE: storing values to SQLite Database ############
+	## Used To Store All Stays to the Database in the 'stays' table
 	def store_stays_to_SQL(self, database_path):
 		try:
 			database = sqlite3.connect(database_path)
 			database.text_factory = str
 			cursor = database.cursor()
 
-			cursor.execute("CREATE TABLE IF NOT EXISTS  stays (identifier, count, stay_lat, stay_long, value_lat, value_long, begin_time, end_time )")
-			stays_curs = cursor.execute("SELECT COUNT FROM stays WHERE identifier=?", [str(self.truck_id[0])])
-			stays_lst = stays_curs.fetchall()
+			stays_curs = cursor.execute("SELECT stay_count FROM stays WHERE carrier_ID=?", [str(self.truck_id[0])])
+			stays_lst = set(stays_curs.fetchall())
 			
-			count = 0
-			if len(stays_lst) is not 0:
-				count = max(stays_lst[0]) + 1
 
 			for stay in self.stay_set:
-				lst = [str(self.truck_id[0]), count, str(stay[0][0]), str(stay[0][1]), "", "", stay[2], stay[3]]
+				rand_ID = int(random.random() * 100000)
+				while True:
+					if not rand_ID in stays_lst:
+						stays_lst.add(rand_ID)
+						break
+					rand_ID = int(random.random() * 100000)
+				lst = [str(self.truck_id[0]), rand_ID, str(stay[0][0]), str(stay[0][1]), "", "", stay[2], stay[3]]
 				for val in stay[1]:
 					lst[4] = str(val[0])
 					lst[5] = str(val[1])
 
 					cursor.execute("INSERT INTO stays VALUES (?,?,?,?,?,?,?,?)", lst)
-				count += 1
 
-			print "stays done"
 			database.commit()
+			print "Stays entry done for: " + str(self.truck_id[0])
 		except Exception as dbe:
 			database.rollback()
 			raise dbe
 		finally:
 			database.close()
 
-
+	## Used To Store All Warehouses to the Database in the 'warehouses' table
 	def store_warehouses_to_SQL(self, database_path):
 		try:
 			database = sqlite3.connect(database_path)
 			database.text_factory = str
 			cursor = database.cursor()
 
-			cursor.execute("CREATE TABLE IF NOT EXISTS warehouses (related_truck, latitude, longitude)")
 			for warehouse in self.warehouses:
 				cursor.execute("INSERT INTO warehouses VALUES (?, ?, ?)", [str(self.truck_id[0]), warehouse[0], warehouse[1]])
 
 			database.commit()
+			print "Warehouse entry done for: " + str(self.truck_id[0])
 		except Exception as dbe:
 			database.rollback()
 			raise dbe
 		finally:
 			database.close()
 
+	## Used To Store All Trips to the Database in the 'trips' table
 	def store_trips_to_SQL(self, database_path):
 		try:
 			database = sqlite3.connect(database_path)
 			database.text_factory = str
 			cursor = database.cursor()
 
-
-			cursor.execute("CREATE TABLE IF NOT EXISTS trips (truck_id, count, value_lat, value_long)")
-			trips_lst = cursor.execute("SELECT COUNT FROM trips WHERE truck_id=?", [str(self.truck_id[0])]).fetchall()
+			trips_lst = cursor.execute("SELECT trip_count FROM trips WHERE carrier_ID=?", [str(self.truck_id[0])]).fetchall()
 			count = 0
 			if len(trips_lst) is not 0:
 				count = max(trips_lst)[0] + 1
@@ -127,23 +124,21 @@ class truck_path:
 				count += 1	
 
 			database.commit()
+			print "Trips entry done for: " + str(self.truck_id[0])
 		except Exception as dbe:
 			database.rollback()
 			raise dbe
 		finally:
 			database.close()
 
-
+	## Used To Store All Destinations to the Database in the 'destinations' table
 	def store_destinations_to_SQL(self, database_path):
 		try:
 			database = sqlite3.connect(database_path)
 			database.text_factory = str
 			cursor = database.cursor()
 
-			print "entering destination entry" 
-
-			cursor.execute("CREATE TABLE IF NOT EXISTS destinations (truck_id, count, stay_lat, stay_long, value_lat, value_long)")
-			dest_lst = cursor.execute("SELECT COUNT FROM destinations WHERE truck_id=?", [str(self.truck_id[0])]).fetchall()
+			dest_lst = cursor.execute("SELECT dest_count FROM destinations WHERE carrier_ID=?", [str(self.truck_id[0])]).fetchall()
 
 			count = 0
 			if len(dest_lst) is not 0:
@@ -158,6 +153,7 @@ class truck_path:
 				count += 1
 
 			database.commit()
+			print "Destinations entry done for: " + str(self.truck_id[0])
 		except Exception as dbe:
 			database.rollback()
 			raise dbe

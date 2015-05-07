@@ -10,14 +10,13 @@
 ###### database
 ######### Contain a sqlite database containing the same data as the processed data folder combined into one table called master_table
 
-## Make relavent directories
+# # Make relavent directories
 # mkdir -p processed_data
 # mkdir -p database
 # mkdir -p raw_already_processed
 
 # ## Make relavant files
 # > database/master.sqlite
-# > database/paths.sqlite
 
 
 # ## Iterate over raw_data folder. Pass file name
@@ -28,13 +27,15 @@
 # 	mv $file raw_already_processed/$filename
 # done
 
-stay_radius=.0002
-stay_time=1
-warehouse_radius=.0002
-idle_time=.5
+stay_radius=40
+stay_time=1.5
+warehouse_radius=140
+idle_time=1
 min_warehouse_time=60
-max_dest_difference=.0002
+max_dest_difference=10
 
-# python main_method.py $stay_radius $warehouse_radius $stay_time $idle_time $min_warehouse_time $max_dest_difference
-python main_method.py .0001 .00001 1 .5 60 .0001
+# # python main_method.py $stay_radius $warehouse_radius $stay_time $idle_time $min_warehouse_time $max_dest_difference
+# python main_method.py .0001 .00001 1 .5 60 .0001
+python main_method.py  $stay_radius $warehouse_radius $stay_time $idle_time $min_warehouse_time $max_dest_difference
+
 

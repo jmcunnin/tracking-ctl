@@ -1,28 +1,26 @@
 #!/usr/bin/env python
-import sys, csv, sqlite3
+import sys, csv, sqlite3, random
 
-
+# NOTE:
+## This class handles the conversions from the input csv files into the master_table table in the DB
+## Further, it assigns each truck a unique id for use by the truck
 
 def main():
-	for arg in sys.argv:
-		print arg
 	file_name = sys.argv[1]
 
 	# Get the file to read from and the file to write to
 	csv_write_from = str(file_name)
 	csv_write_to = str(file_name).replace("raw_data", "processed_data")
-	# table_name = csv_write_from.split("/")
-	# table_name = table_name[-1]
 
 	# Initialize database if not initialized with the master_table
 	try:
 		database = sqlite3.connect('./database/master.sqlite')
 		cursor = database.cursor()
-		create_table_SQL = "CREATE TABLE IF NOT EXISTS master_table (truck_id, latitude, longitude, timestamp)"
-		cursor.execute(create_table_SQL)
+		cursor.execute("CREATE TABLE IF NOT EXISTS master_table (carrier_ID, latitude, longitude, timestamp)")
+		cursor.execute("CREATE TABLE IF NOT EXISTS truck_id_table (truck_ID, unique_ID)")
 		database.commit()
 	except Exception as dbe:
-		print "Something went wrong with the database creation"
+		print "Something went wrong with the database creation up here"
 		database.rollback()
 		raise dbe
 	finally:
@@ -41,7 +39,6 @@ def main():
 		csv_reader = csv.reader(read_from, delimiter=',', quotechar = '|')
 		csv_writer = csv.writer(write_to, delimiter=',', quotechar = '|', quoting=csv.QUOTE_MINIMAL)
 		for row in csv_reader:
-			print row
 			# Defining the correct positions in the input CSV for the [truck_id, latitude, longitude, timestamp]
 			if not is_set:
 				arr = get_columns(row)
@@ -57,7 +54,27 @@ def main():
 				csv_writer.writerow(data_arr)
 				try:
 					database = sqlite3.connect('./database/master.sqlite')
+					database.text_factory = str
 					cursor = database.cursor()
+
+					## This chunk handles giving each truck a universally unique truck-id 
+					## NOTE: decided to make use of this method as opposed to UUID python module for the ease of number usage
+					curr_truck = str(data_arr[0])
+					get_unique_truck_id = cursor.execute("SELECT unique_ID FROM truck_id_table WHERE truck_ID=?", [curr_truck]).fetchone()
+					if get_unique_truck_id is None:
+						rand_ID = int(random.random() * 100000)
+						while True:
+							## Create a new random number
+							next_ID = cursor.execute("SELECT * FROM truck_id_table WHERE unique_ID=?", [rand_ID]).fetchall()
+							if len(next_ID) is 0:
+								break
+							else:
+								rand_ID = int(random.random() * 100000)
+						data_arr[0] = rand_ID
+						cursor.execute("INSERT INTO truck_id_table VALUES (?,?)", [curr_truck, rand_ID])
+					else:
+						data_arr[0] = str(get_unique_truck_id[0])
+
 					cursor.execute("INSERT INTO master_table VALUES (?, ?, ?, ?)", data_arr)
 					database.commit()
 				except Exception as e:
@@ -66,6 +83,7 @@ def main():
 					raise e
 				finally:
 					database.close()
+		print "File: " + csv_write_from + " has been transferred to master_table"
 
 
 

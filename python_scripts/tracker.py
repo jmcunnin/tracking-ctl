@@ -3,6 +3,8 @@ import sys, sqlite3, math
 
 from path_object import truck_path
 from copy import deepcopy
+import math as m
+from filter_jumps import filter_noise
 
 class tracker:
 
@@ -170,12 +172,17 @@ class tracker:
 		return difference
 
 
-	## Computes the distance between the x and y coordinates passed 
 	def distance(self, pt1, pt2):
+		earth_radius = 6371000.  ## Radius in meters
+		pt1_x = earth_radius*m.cos(float(pt1[0]))*m.cos(float(pt1[1]))
+		pt1_y = earth_radius*m.cos(float(pt1[0]))*m.sin(float(pt1[1]))
+		pt1_z = earth_radius*m.sin(float(pt1[0]))
 
-		delta_x = float(pt1[0])-float(pt2[0])
-		delta_y = float(pt1[1])-float(pt2[1])
-		return pow(pow(delta_x, 2) + pow(delta_y, 2), .5)
+		pt2_x = earth_radius*m.cos(float(pt2[0]))*m.cos(float(pt2[1]))
+		pt2_y = earth_radius*m.cos(float(pt2[0]))*m.sin(float(pt2[1]))
+		pt2_z = earth_radius*m.sin(float(pt2[0]))
+
+		return pow((pow((pt1_x - pt2_x), 2) + pow((pt1_y - pt2_y), 2) + pow((pt1_y - pt2_y), 2)), .5)
 
 	## Computes the medoid over a set of points
 	#### The medoid is defined as the point in a set of data that minimizes the overall distance to all other points
@@ -218,7 +225,7 @@ class tracker:
 			database.text_factory = str
 			curs = database.cursor()
 
-			curs.execute("""SELECT latitude, longitude, timestamp FROM master_table WHERE truck_id=?""", [str(self.truck_id[0])])
+			curs.execute("""SELECT latitude, longitude, timestamp FROM master_table WHERE carrier_ID=?""", [str(self.truck_id[0])])
 			self.data = curs.fetchall()
 			
 			database.commit()
@@ -228,6 +235,9 @@ class tracker:
 			raise dbe
 		finally:
 			database.close()
+
+		## This line filters out all outlying data (i.e. any jumps over 150 kph)
+		# self.data = filter_noise(self.data, 150.).filter()
 
 		## Calculate stays and store to SQL
 		self.calculate_stays()
