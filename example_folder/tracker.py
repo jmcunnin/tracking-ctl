@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import sys, sqlite3, math
+import sys, sqlite3, math, multiprocessing
 
 from path_object import truck_path
 from copy import deepcopy
@@ -7,7 +7,6 @@ import math as m
 from filter_jumps import filter_noise
 
 class tracker:
-
 
 	def __init__(self, database_path, truck_id, path, stay_radius, warehouse_radius, min_stay_time, max_idle_time, min_warehouse_time, max_dest_difference):
 		## string representing the path to the database
@@ -27,6 +26,9 @@ class tracker:
 		self.max_dest_difference = max_dest_difference
 		self.data = list()
 
+	#############
+	# Method used to calculate the relative warehouses for the truck path
+	# Modifies the warehosue field of the path object associated with the call to trackers
 	def calculate_warehouse(self):
 		## calculate the storage center/s and store to path_object
 		i = 0
@@ -54,7 +56,9 @@ class tracker:
 				i = j + 1
 
 
-	
+	############
+	# Method used to calculate the relative stays for the truck's path
+	# Modifies the stays field of the path object associated with the call to trackers
 	def calculate_stays(self):
 		## Calculate our stays here and add to the path_object
 		i = 0
@@ -84,8 +88,9 @@ class tracker:
 				i = j + 1
 
 
-
-
+	############		
+	# Method used to calculate the points associated with the trips between the stays
+	# 
 	def calculate_trips(self):
 		## Calculate our trips here and add to the path_object
 		stays = self.path.get_stays()
@@ -161,28 +166,25 @@ class tracker:
 		## Array = [day, month, year, hour, minute, second]
 		time1_arr = [int(time1[0:2]), int(time1[3:5]), int(time1[6:10]), int(time1[11:13]), int(time1[14:16]), int(time1[17:19])]
 		time2_arr = [int(time2[0:2]), int(time2[3:5]), int(time2[6:10]), int(time2[11:13]), int(time2[14:16]), int(time2[17:19])]
+		corrections = [1440., 43829., 525949., 60., 1, 1/60]
 
-		difference = 0.0
-		difference += (time1_arr[0] - time2_arr[0])*1440.
-		difference += (time1_arr[1] - time2_arr[1])*43829.
-		difference += (time1_arr[2] - time2_arr[2])*525949.
-		difference += (time1_arr[3] - time2_arr[3])*60.
-		difference += (time1_arr[4] - time2_arr[4])
-		difference += (time1_arr[4] - time2_arr[4])/60.
-		return difference
+		return sum([(t1 - t2)*corr for t1, t2, corr in zip(time1_arr, time2_arr, corrections)])
 
 
 	def distance(self, pt1, pt2):
 		earth_radius = 6371000.  ## Radius in meters
-		pt1_x = earth_radius*m.cos(float(pt1[0]))*m.cos(float(pt1[1]))
-		pt1_y = earth_radius*m.cos(float(pt1[0]))*m.sin(float(pt1[1]))
-		pt1_z = earth_radius*m.sin(float(pt1[0]))
+		print "called"
+		lat1, lon1 = pt1
+		lat2, lon2 = pt2
+		lst = [lat1, lon1, lat2, lon2]
+		lat1, lon1, lat2, lon2 = map(m.radians, [float(x) for x in lst])
 
-		pt2_x = earth_radius*m.cos(float(pt2[0]))*m.cos(float(pt2[1]))
-		pt2_y = earth_radius*m.cos(float(pt2[0]))*m.sin(float(pt2[1]))
-		pt2_z = earth_radius*m.sin(float(pt2[0]))
-
-		return pow((pow((pt1_x - pt2_x), 2) + pow((pt1_y - pt2_y), 2) + pow((pt1_y - pt2_y), 2)), .5)
+		dlon = lon2 - lon1 
+		dlat = lat2 - lat1 
+		
+		a = m.sin(dlat/2)**2 + m.cos(lat1) * m.cos(lat2) * m.sin(dlon/2)**2
+		c = 2 * m.asin(m.sqrt(a)) 
+		return (6367 * c) * 1000
 
 	## Computes the medoid over a set of points
 	#### The medoid is defined as the point in a set of data that minimizes the overall distance to all other points
@@ -191,10 +193,7 @@ class tracker:
 		min_sum = 10000000000 ## basically setting to infinity and improving
 		
 		for elt1 in points:
-			i_sum = 0
-			for elt2 in points:
-				if elt1 != elt2:
-					i_sum += self.distance(elt1, elt2)
+			i_sum = sum([self.distance(x, elt1) for x in points])
 			if i_sum < min_sum:
 				best_point = elt1
 				min_sum = i_sum
@@ -208,12 +207,7 @@ class tracker:
 	def diameter(self, points):
 		biggest_diameter = 0
 		for pt1 in points:
-			pt1_max_diam = 0
-			for pt2 in points:
-				if pt1 != pt2:
-					intermediate_diameter = self.distance(pt1, pt2)
-					if intermediate_diameter > pt1_max_diam:
-						pt1_max_diam = intermediate_diameter
+			pt1_max_diam = max([self.distance(x, pt1) for x in points])
 			if pt1_max_diam > biggest_diameter:
 				biggest_diameter = pt1_max_diam
 		return biggest_diameter
@@ -240,17 +234,70 @@ class tracker:
 		# self.data = filter_noise(self.data, 150.).filter()
 
 		## Calculate stays and store to SQL
-		self.calculate_stays()
-		self.path.store_stays_to_SQL(self.db_path)
+		### Multi-threaded way to split up calculating warehouse and stays
+		processes = []
 
-		self.calculate_warehouse()
-		self.path.store_warehouses_to_SQL(self.db_path)
-		
+		stay_proc = Compute_Stays_Thread(self, self.path, self.db_path)
+		processes += [stay_proc]
+		stay_proc.start()
+
+		warehouse_proc = Compute_Warehouse_Thread(self, self.path, self.db_path)
+		processes += [warehouse_proc]
+		warehouse_proc.start()
+
+		try:
+			while True:
+				## continue doing this unless we get an interrupt
+				pass
+		except KeyboardInterrupt:
+			for proc in processes:
+				thr.terminate()
+
+		for proc in processes:
+			proc.join()
+		### End multi-threaded
+
+		##### Single-threaded methods
+		# self.calculate_stays()
+		# self.path.store_stays_to_SQL(self.db_path)
+
+		# self.calculate_warehouse()
+		# self.path.store_warehouses_to_SQL(self.db_path)
+		##### End Single-threaded stuffs.
+
+
 		self.calculate_trips()
 		self.path.store_trips_to_SQL(self.db_path)	
 		
 		self.calculate_destinations()
 		self.path.store_destinations_to_SQL(self.db_path)
+
+	def set_data_test(self, test_data):
+		self.data = test_data
+
+
+## Helper classes used by the multi-threaded implementation to split up stay and warehouse calculation.
+class Compute_Stays_Thread(multiprocessing.Process):
+	def __init__(self, tracker, path, db_path):
+		multiprocessing.Process.__init__(self)
+		self.tracker = tracker
+		self.path_object = path
+		self.db_path = db_path
+
+	def run(self):
+		self.tracker.calculate_stays()
+		self.path_object.store_stays_to_SQL(self.db_path)
+
+class Compute_Warehouse_Thread(multiprocessing.Process):
+	def __init__(self, tracker, path, db_path):
+		multiprocessing.Process.__init__(self)
+		self.tracker = tracker
+		self.path_object = path
+		self.db_path = db_path
+
+	def run(self):
+		self.tracker.calculate_warehouse()
+		self.path_object.store_warehouses_to_SQL(self.db_path)
 
 
 
