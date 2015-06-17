@@ -27,7 +27,7 @@ do
 	mv $file raw_already_processed/$filename
 done
 
-stay_radius=20
+stay_radius= 20
 stay_time=1
 warehouse_radius=140
 idle_time=.5

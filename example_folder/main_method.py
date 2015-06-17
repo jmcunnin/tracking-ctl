@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### Call to method is defined by: python main_method.py arg1=stay_radius arg2=stay_time arg3=warehosue_radius arg4= min_stay
 ## System stuffs
-import sys, sqlite3
+import sys, sqlite3, time
 import multiprocessing 
 ## Project stuffs
 from tracker import tracker
@@ -9,11 +9,10 @@ from path_object import truck_path
 import numpy as np
 
 ## This class makes is used to call all of the actual operations that occur (i.e. it primarily is built to call the tracker)
-
-database_path =  './database/master.sqlite'
-
 ## Implement the tracking modules 
 def main(argv):
+	global count
+	database_path =  './database/master.sqlite'
 	#### Pass to tracker class as tables of truck_id
 	unique_truckID = []
 	try:
@@ -38,49 +37,57 @@ def main(argv):
 	finally:
 		database.close()
 
+	# Flatten the array and only take unique (issue with sqlite API has ints and strings returned)s
+	unique_truckID = [x for inner_arr in set(unique_truckID) for x in inner_arr if isinstance(x, int)]
 
-	###### Single-Threaded implementation
-	# for truck in unique_truckID:
-	# 	truck_PO = truck_path(truck)
-	# 	track_this = tracker(database_path, truck, truck_PO, float(argv[0]), float(argv[1]), float(argv[2]), float(argv[3]), float(argv[4]), float(argv[5]))
-	# 	track_this.compute_tracker()
+	### Multi-threaded implementation
+	queue = multiprocessing.JoinableQueue()
 
+	num_cpu = multiprocessing.cpu_count()*2
+	workers = [QueueWorker(queue) for i in xrange(num_cpu)]
+	for worker in workers:
+		worker.start()
 
-	#### Multi-threaded implementation
-	num_divisions = 4
-	sub_arrs = np.array_split(unique_truckID, num_divisions)
-	processes = []
-	
-	for sub_arr in sub_arrs:
-		proc = Truck_Tracker(argv, database_path, sub_arr)
-		processes += [proc]
-		proc.start()
+	for truck in unique_truckID:
+		truck_task = Truck_Tracker(argv, database_path, truck)
+		queue.put(truck_task)
+
+	for i in xrange(num_cpu):
+		queue.put(None)
 
 	try:
-		while True:
-			## continue doing this unless we get an interrupt
-			pass
-	except KeyboardInterrupt:
-		for proc in processes:
-			thr.terminate()
+		queue.join()
+	except KeyboardInterrupt as ke:
+		raise RuntimeError("Keyboard Interrupt")
 
-	for proc in processes:
-		proc.join()
-
-
-class Truck_Tracker(multiprocessing.Process):
-	def __init__(self, argv, db_path, truck_sub_array):
-		multiprocessing.Process.__init__(self)
+class Truck_Tracker:
+	def __init__(self, argv, db_path, truck):
 		self.argv = argv
-		self.sub_array = truck_sub_array
+		self.truck = truck
 		self.db_path = db_path
 
+	def compute_tracker(self):
+		truck_PO = truck_path(self.truck)
+		new_tracker = tracker(self.db_path, self.truck, truck_PO, float(self.argv[0]), float(self.argv[1]), float(self.argv[2]), float(self.argv[3]), float(self.argv[4]), float(self.argv[5]))
+		new_tracker.compute_tracker()
+
+
+class QueueWorker(multiprocessing.Process):
+
+	def __init__(self, queue):
+		multiprocessing.Process.__init__(self)
+		self.queue = queue
+
 	def run(self):
-		for truck in self.sub_array:
-			truck_PO = truck_path(truck)
-			new_tracker = tracker(self.db_path, truck, truck_PO, float(self.argv[0]), float(self.argv[1]), float(self.argv[2]), float(self.argv[3]), float(self.argv[4]), float(self.argv[5]))
-			new_tracker.compute_tracker()
+		while True:
+			task = self.queue.get()
+			if task is None:
+				self.queue.task_done()
+				break
+			task.compute_tracker()
+			self.queue.task_done()
+		return
+
 
 if __name__=="__main__":
-	print sys.argv[1:]
 	main(sys.argv[1:])
