@@ -3,12 +3,14 @@ import  sqlite3, multiprocessing
 from path_object import truck_path
 from copy import deepcopy
 import math as m
-from filter_jumps import filter_noise
+from filter_jumps import filter
 
 
-
+INFINITY = "INF" ## Only works with Python 2.x, upgrade for 3
 
 class tracker:
+
+
 	def __init__(self, database_path, truck_id, path, stay_radius, warehouse_radius, min_stay_time, max_idle_time,
 				 min_warehouse_time, max_dest_difference):
 		## string representing the path to the database
@@ -93,21 +95,28 @@ class tracker:
 	#
 	def calculate_trips(self):
 		## Calculate our trips here and add to the path_object
+		raw_dat = [x[0:2] for x in self.data]
 		stays = self.path.get_stays()
+		stay_marker = [x[0] for x in stays]
+
 		warehouses = self.path.get_warehouse()
 		if len(stays) == 0:
 			raise RuntimeError("No stays calculated. Reprametrize")
 
 		## Add a trip object if the first stay does not occur until after the start of the data
-		current_trip = []
-		for stay in stays:
-			stay_at_warehouse = self.in_warehouse(stay[0], warehouses)
-			if stay_at_warehouse:
-				if not len(current_trip) is 0:
-					self.path.add_trip(deepcopy(current_trip))
-					current_trip[:] = []
+		i = 0
+		curr_trip = list()
+		for val in raw_dat:
+			if (i < len(stay_marker)) and (val == stay_marker[i]):
+				self.path.add_trip(deepcopy(curr_trip))
+				i+=1
+				curr_trip = []
 			else:
-				current_trip.append(stay[0])
+				curr_trip.append(deepcopy(val))
+		self.path.add_trip(curr_trip)
+
+
+
 
 	def in_warehouse(self, point, warehouses):
 		for warehouse in warehouses:
@@ -116,24 +125,33 @@ class tracker:
 		return False
 
 	def calculate_destinations(self):
-		stays = self.path.get_stays()
-		stays_copy = deepcopy(stays)
+		locs = [(x[0], x[1]) for x in self.data]
 
-		while len(stays_copy) is not 0:
-			dest = []
-			pt = stays_copy.pop()
-			dest.append(pt[0])
-			while (True):
-				min_pt = self.min_distance_pt(pt[0], stays_copy)
-				if min_pt is None:
-					break
-				elif self.distance(pt[0], min_pt[0]) <= self.max_dest_difference:
-					dest.append(min_pt[0])
-					stays_copy.remove(min_pt)
-				else:
-					break
-			med = self.medoid(dest)
-			self.path.add_destination(med, dest)
+		### Combine all duplicated points
+		dests = dict()
+		counts = dict((i , locs.count(i)) for i in locs)
+		for key in counts:
+			dests[key] = [key for i in xrange(counts[key])]
+
+		while True:
+			locs = deepcopy(dests.keys())
+			closest_pair = self.find_closest(locs)
+			if len(closest_pair) is 1:
+				break
+			if closest_pair[2] > self.max_dest_difference:
+				break
+
+			combined = dests[closest_pair[0]] + dests[closest_pair[1]]
+			del dests[closest_pair[0]]
+			del dests[closest_pair[1]]
+
+			medoid = self.medoid(combined)
+			dests[medoid] = combined
+
+		MIN_PTS_FOR_DEST = 5
+		for dest in dests.keys():
+			if len(dests[dest]) > MIN_PTS_FOR_DEST:
+				self.path.add_destination(dest, dests[dest])
 
 	def min_distance_pt(self, point, list_pts):
 		min_dist = 10000000
@@ -171,35 +189,18 @@ class tracker:
 
 	def distance(self, pt1, pt2):
 		earth_radius = 6371000.  ## Radius in meters
-		pt1_x = earth_radius * m.cos(float(pt1[0])) * m.cos(float(pt1[1]))
-		pt1_y = earth_radius * m.cos(float(pt1[0])) * m.sin(float(pt1[1]))
-		pt1_z = earth_radius * m.sin(float(pt1[0]))
+		lst = [pt1[0], pt1[1], pt2[0], pt2[1]]
+		lat1, lon1, lat2, lon2 = map(m.radians, [float(x) for x in lst])
 
-		pt2_x = earth_radius * m.cos(float(pt2[0])) * m.cos(float(pt2[1]))
-		pt2_y = earth_radius * m.cos(float(pt2[0])) * m.sin(float(pt2[1]))
-		pt2_z = earth_radius * m.sin(float(pt2[0]))
-
-		return pow((pow((pt1_x - pt2_x), 2) + pow((pt1_y - pt2_y), 2) + pow((pt1_y - pt2_y), 2)), .5)
-
-	## This computes the haversine distance as opposed to the law of cos. If you wish to switch, change header to distance and above to something else
-	# def haversine_dist(self, pt1, pt2):
-	# 	lat1, lon1 = pt1
-	# 	lat2, lon2 = pt2
-	# 	lst = [lat1, lon1, lat2, lon2]
-	# 	lat1, lon1, lat2, lon2 = map(m.radians, [float(x) for x in lst])
-     #
-	# 	dlon = lon2 - lon1
-	# 	dlat = lat2 - lat1
-     #
-	# 	a = m.sin(dlat/2)**2 + m.cos(lat1) * m.cos(lat2) * m.sin(dlon/2)**2
-	# 	c = 2 * m.asin(m.sqrt(a))
-	# 	return (6367 * c) * 1000
+		a = m.sin((lat2 - lat1)/2)**2 + m.cos(lat1) * m.cos(lat2) * m.sin((lon2 - lon1)/2)**2
+		c = 2 * m.asin(m.sqrt(a))
+		return c * earth_radius
 
 	## Computes the medoid over a set of points
 	#### The medoid is defined as the point in a set of data that minimizes the overall distance to all other points
 	def medoid(self, points):
-		best_point = None  ## best_point[0] = point, best_point[1] = sum
-		min_sum = 10000000000  ## basically setting to infinity and improving
+		best_point = None
+		min_sum = INFINITY
 
 		for elt1 in points:
 			i_sum = sum([self.distance(x, elt1) for x in points])
@@ -221,6 +222,20 @@ class tracker:
 				biggest_diameter = pt1_max_diam
 		return biggest_diameter
 
+	def find_closest(self, points):
+		min_dist = INFINITY  ## basically setting to infinity and improving
+		curr_best = points[0]
+		match = None
+		for outer_pt in points:
+			for inner_pt in points:
+				if outer_pt != inner_pt:
+					curr_dist = self.distance(inner_pt, outer_pt)
+					if curr_dist < min_dist:
+						min_dist = curr_dist
+						curr_best = outer_pt
+						match = inner_pt
+		return [curr_best, match, min_dist]
+
 	def compute_tracker(self):
 		global process_count
 		try:
@@ -241,39 +256,17 @@ class tracker:
 			database.close()
 
 		# # This line filters out all outlying data (i.e. any jumps over 150 kph)
-		# # self.data = filter_noise(self.data, 150.).filter()
+		# print "Filtering any truck jumps for: " + str(self.truck_id)
+		# self.data = filter(self.data, 150.)
+
+
 		## Calculate stays and store to SQL
 
-		### Multi-threaded
-        #
-		# queue = multiprocessing.JoinableQueue()
-		# workers = [Worker(queue) for i in xrange(2)] ## warehouse and stay computed
-		# for w in workers:
-		# 	w.start()
-        #
-		# stay_proc = Compute_Stays_Thread(self, self.path, self.db_path)
-		# queue.put(stay_proc)
-        #
-		# warehouse_proc = Compute_Warehouse_Thread(self, self.path, self.db_path)
-		# queue.put(warehouse_proc)
-        #
-		# queue.put(None)
-		# queue.put(None)
-        #
-		# try:
-		# 	queue.join()
-		# except KeyboardInterrupt as ke:
-		# 	raise RuntimeError("Keyboard Interrupt")
-		### End multi-threaded
-
-
-		#### Single Threaded Implementation
 		self.calculate_stays()
 		self.path.store_stays_to_SQL(self.db_path)
 
 		self.calculate_warehouse()
 		self.path.store_warehouses_to_SQL(self.db_path)
-		#### End Single Threaded Implementation
 
 		self.calculate_trips()
 		self.path.store_trips_to_SQL(self.db_path)
@@ -286,47 +279,6 @@ class tracker:
 		self.data = test_data
 
 
-# # ## Helper classes used by the multi-threaded implementation to split up stay and warehouse calculation.
-# class Compute_Stays_Thread():
-# 	def __init__(self, tracker, path, db_path):
-# 		self.tracker = tracker
-# 		self.path_object = path
-# 		self.db_path = db_path
-#
-# 	def compute(self):
-# 		self.tracker.calculate_stays()
-# 		self.path_object.store_stays_to_SQL(self.db_path)
-# 		return
-#
-#
-#
-# class Compute_Warehouse_Thread():
-# 	# global warehouse_status
-# 	def __init__(self, tracker, path, db_path):
-# 		self.tracker = tracker
-# 		self.path_object = path
-# 		self.db_path = db_path
-# 		self.curr_stat = False
-#
-# 	def compute(self):
-# 		self.tracker.calculate_warehouse()
-# 		self.path_object.store_warehouses_to_SQL(self.db_path)
-# 		return
-#
-# class Worker(multiprocessing.Process):
-# 	def __init__(self, queue):
-# 		multiprocessing.Process.__init__(self)
-# 		self.queue = queue
-#
-# 	def run(self):
-# 		while True:
-# 			task = self.queue.get()
-# 			if task is None:
-# 				self.queue.task_done()
-# 				break
-# 			task.compute()
-# 			self.queue.task_done()
-# 		return
 
 
 

@@ -25,7 +25,8 @@ class truck_path:
 		self.stay_set.append(tup)
 
 	def add_trip(self, points_list):
-		self.trips.append(points_list)
+		if len(points_list) > 0:
+			self.trips.append(points_list)
 
 	def add_warehouse(self, point):
 		self.warehouses.append(point)
@@ -143,15 +144,13 @@ class truck_path:
 			count = 0
 			if len(dest_lst) is not 0:
 				count = max(dest_lst)[0] + 1
-
 			for dest in self.destinations:
 				lst = [str(self.truck_id), count, str(dest[0][0]), str(dest[0][1]), "", ""]
 				for val in dest[1]:
-					lst[2] = str(val[0])
-					lst[3] = str(val[1])
+					lst[4] = str(val[0])
+					lst[5] = str(val[1])
 					cursor.execute("INSERT INTO destinations VALUES (?,?,?,?,?,?)", lst)
 				count += 1
-
 			database.commit()
 			print "Destinations entry done for: " + str(self.truck_id)
 		except Exception as dbe:
