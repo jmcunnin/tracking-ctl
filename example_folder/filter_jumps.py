@@ -5,10 +5,8 @@ import math as m
 def filter(data, max_speed):
 	ret_lst = [data[0]]
 	max_speed = (float(max_speed)/(60.))*1000.
-	print max_speed
 
-	i = 0
-	while i < (len(data) - 1):
+	for i in xrange(len(data) - 1):
 		vel = velocity(data[i+1], data[i])
 		if vel < max_speed:
 			ret_lst.append([data[i+1]])
@@ -16,7 +14,8 @@ def filter(data, max_speed):
 		else:
 			print "jumped"
 			i += 2
-			ret_lst.append([data[i]])
+			ret_lst.append(data[i])
+	ret_lst =  [x[0] for x in ret_lst if len(x[0]) == 3]
 	return ret_lst
 
 
@@ -38,8 +37,7 @@ def velocity(pt1, pt2):
 
 		### Calculate d_x
 		earth_radius = 6367000
-		lst = [pt1[0], pt1[1], pt2[0], pt2[1]]
-		lat1, lon1, lat2, lon2 = map(m.radians, [float(x) for x in lst])
+		lat1, lon1, lat2, lon2 = map(m.radians, [float(x) for x in [pt1[0], pt1[1], pt2[0], pt2[1]]])
 
 		a = m.sin((lat2 - lat1)/2)**2 + m.cos(lat1) * m.cos(lat2) * m.sin((lon2 - lon1)/2)**2
 		c = 2 * m.asin(m.sqrt(a))

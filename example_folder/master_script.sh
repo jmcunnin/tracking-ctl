@@ -26,12 +26,13 @@ do
 	filename= basename $file
 	mv $file raw_already_processed/$filename
 done
-stay_radius=20
-stay_time=1
-warehouse_radius=140
-idle_time=.5
-min_warehouse_time=60
-max_dest_difference=20
+
+stay_radius=20 ## Meters
+stay_time=1 ## Minutes
+warehouse_radius=140 ## Meters
+idle_time=.5 ## Minutes
+min_warehouse_time=60 ## Minutes
+max_dest_difference=20 ## Meters
 
 python main_method.py  $stay_radius $warehouse_radius $stay_time $idle_time $min_warehouse_time $max_dest_difference
 

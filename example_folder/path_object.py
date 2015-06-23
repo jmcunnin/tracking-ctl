@@ -3,9 +3,6 @@ import sys, sqlite3, random
 from copy import deepcopy
 
 class truck_path:
-
-
-
 	## A path_object is used to store the information about the path of a specific truck
 	#### Fields: truck_id (A string representing the truck's id), 
 	def __init__(self, truck_id):

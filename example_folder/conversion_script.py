@@ -26,13 +26,6 @@ def main():
 	finally:
 		database.close()
 
-
-	# Initialize variables to keep track of positions
-	truck_identification_pos = -1
-	latitude_identification_pos = -1
-	longitude_identification_pos = -1
-	date_pos = -1
-
 	# Read from the csv file
 	with open(csv_write_from, 'rU') as read_from, open(csv_write_to, 'wb') as write_to:
 		is_set = False
@@ -43,10 +36,7 @@ def main():
 			if not is_set:
 				arr = get_columns(row)
 				# Set positions
-				truck_identification_pos = arr[0]
-				latitude_identification_pos = arr[1]
-				longitude_identification_pos = arr[2]
-				date_pos = arr[3]
+				truck_identification_pos, latitude_identification_pos, longitude_identification_pos, date_pos = arr
 				is_set = True
 			# Conduct the writing to the filtered files and to the database
 			else:
@@ -91,7 +81,7 @@ def main():
 
 ## Returns an array with the positions in the csv: [truck_id, latitude, longitude, timestamp]
 def get_columns(input_list):
-	returned_positions = [-1, -1, -1, -1]
+	returned_positions = [None]*4
 
 	# Initialize the possible headers to be compared against.
 	#### NOTE: If your data has other header names, insert them into the relative set here
@@ -100,9 +90,8 @@ def get_columns(input_list):
 	longitude_name_set = set(['longitud', 'longitude'])
 	date_name_set = set(['fecha', 'date', 'timestamp'])
 
-	# Iterating through the headers to set the right places 
-	counter = 0
-	for header in input_list:
+	# Iterating through the headers to set the right places
+	for counter, header in enumerate(input_list):
 		if header.lower() in id_name_set:
 			returned_positions[0] = counter
 		elif header.lower() in latitude_name_set:
@@ -111,13 +100,11 @@ def get_columns(input_list):
 			returned_positions[2] = counter
 		elif header.lower() in date_name_set:
 			returned_positions[3] = counter
-		counter += 1
 
 
 	## Check to make sure the document is formatted right. If not we throw an exception
-	for pos in returned_positions:
-		if pos == -1:
-			raise Exception("Input is improperly formatted. Check input formatting for the file: " + sys.argv[1])
+	if None in returned_positions:
+		raise Exception("Input is improperly formatted. Check input formatting for the file: " + sys.argv[1])
 
 	return returned_positions
 

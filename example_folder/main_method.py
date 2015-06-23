@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 ### Call to method is defined by: python main_method.py arg1=stay_radius arg2=stay_time arg3=warehosue_radius arg4= min_stay
 ## System stuffs
-import sys, sqlite3, time
+import sys, sqlite3
 import multiprocessing 
 ## Project stuffs
 from tracker import tracker
 from path_object import truck_path
-import numpy as np
 
 ## This class makes is used to call all of the actual operations that occur (i.e. it primarily is built to call the tracker)
 ## Implement the tracking modules 
 def main(argv):
-	global count
 	database_path =  './database/master.sqlite'
 	#### Pass to tracker class as tables of truck_id
 	unique_truckID = []

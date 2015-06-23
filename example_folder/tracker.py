@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import  sqlite3, multiprocessing
+import  sqlite3
 from path_object import truck_path
 from copy import deepcopy
 import math as m
@@ -92,7 +92,7 @@ class tracker:
 
 	############
 	# Method used to calculate the points associated with the trips between the stays
-	#
+	# A trip is defined as the series of points in the path, bifurcated by the stays, This was inferred, but not explicit from Proj. Lachesis
 	def calculate_trips(self):
 		## Calculate our trips here and add to the path_object
 		raw_dat = [x[0:2] for x in self.data]
@@ -183,10 +183,12 @@ class tracker:
 					 int(time1[17:19])]
 		time2_arr = [int(time2[0:2]), int(time2[3:5]), int(time2[6:10]), int(time2[11:13]), int(time2[14:16]),
 					 int(time2[17:19])]
-		corrections = [1440., 43829., 525949., 60., 1, 1 / 60]
+		## Minutes per: day, month, year, hour, minute, second
+		corrections = [1440., 43829., 525949., 60., 1., 1. / 60.]
 
 		return sum([(t1 - t2) * corr for t1, t2, corr in zip(time1_arr, time2_arr, corrections)])
 
+	## Computes the haversine distance
 	def distance(self, pt1, pt2):
 		earth_radius = 6371000.  ## Radius in meters
 		lst = [pt1[0], pt1[1], pt2[0], pt2[1]]
@@ -223,7 +225,7 @@ class tracker:
 		return biggest_diameter
 
 	def find_closest(self, points):
-		min_dist = INFINITY  ## basically setting to infinity and improving
+		min_dist = INFINITY
 		curr_best = points[0]
 		match = None
 		for outer_pt in points:
@@ -237,7 +239,6 @@ class tracker:
 		return [curr_best, match, min_dist]
 
 	def compute_tracker(self):
-		global process_count
 		try:
 			database = sqlite3.connect(self.db_path)
 			database.text_factory = str
@@ -255,9 +256,11 @@ class tracker:
 		finally:
 			database.close()
 
-		# # This line filters out all outlying data (i.e. any jumps over 150 kph)
+		### This line filters out all outlying data (i.e. any jumps over 150 kph)
+		### Uncomment for usage.
 		# print "Filtering any truck jumps for: " + str(self.truck_id)
 		# self.data = filter(self.data, 150.)
+
 
 
 		## Calculate stays and store to SQL
@@ -273,10 +276,6 @@ class tracker:
 
 		self.calculate_destinations()
 		self.path.store_destinations_to_SQL(self.db_path)
-
-
-	def set_data_test(self, test_data):
-		self.data = test_data
 
 
 
